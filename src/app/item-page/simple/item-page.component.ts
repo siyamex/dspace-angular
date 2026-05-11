@@ -14,6 +14,27 @@ import {
   ActivatedRoute,
   Router,
 } from '@angular/router';
+import { NotifyInfoService } from '@dspace/core/coar-notify/notify-info/notify-info.service';
+import { AuthorizationDataService } from '@dspace/core/data/feature-authorization/authorization-data.service';
+import { FeatureID } from '@dspace/core/data/feature-authorization/feature-id';
+import { ItemDataService } from '@dspace/core/data/item-data.service';
+import { RemoteData } from '@dspace/core/data/remote-data';
+import { SignpostingDataService } from '@dspace/core/data/signposting-data.service';
+import { SignpostingLink } from '@dspace/core/data/signposting-links.model';
+import { getItemPageRoute } from '@dspace/core/router/utils/dso-route.utils';
+import {
+  LinkDefinition,
+  LinkHeadService,
+} from '@dspace/core/services/link-head.service';
+import { ServerResponseService } from '@dspace/core/services/server-response.service';
+import { Item } from '@dspace/core/shared/item.model';
+import { ItemRequest } from '@dspace/core/shared/item-request.model';
+import { getAllSucceededRemoteDataPayload } from '@dspace/core/shared/operators';
+import { ViewMode } from '@dspace/core/shared/view-mode.model';
+import {
+  hasValue,
+  isNotEmpty,
+} from '@dspace/shared/utils/empty.util';
 import { TranslateModule } from '@ngx-translate/core';
 import {
   combineLatest,
@@ -25,33 +46,18 @@ import {
   switchMap,
   take,
 } from 'rxjs/operators';
-import { NotifyInfoService } from 'src/app/core/coar-notify/notify-info/notify-info.service';
+import { validate as uuidValidate } from 'uuid';
 
-import { AuthorizationDataService } from '../../core/data/feature-authorization/authorization-data.service';
-import { FeatureID } from '../../core/data/feature-authorization/feature-id';
-import { ItemDataService } from '../../core/data/item-data.service';
-import { RemoteData } from '../../core/data/remote-data';
-import { SignpostingDataService } from '../../core/data/signposting-data.service';
-import { SignpostingLink } from '../../core/data/signposting-links.model';
-import {
-  LinkDefinition,
-  LinkHeadService,
-} from '../../core/services/link-head.service';
-import { ServerResponseService } from '../../core/services/server-response.service';
-import { Item } from '../../core/shared/item.model';
-import { getAllSucceededRemoteDataPayload } from '../../core/shared/operators';
-import { ViewMode } from '../../core/shared/view-mode.model';
 import { fadeInOut } from '../../shared/animations/fade';
-import { isNotEmpty } from '../../shared/empty.util';
 import { ErrorComponent } from '../../shared/error/error.component';
 import { ThemedLoadingComponent } from '../../shared/loading/themed-loading.component';
 import { ListableObjectComponentLoaderComponent } from '../../shared/object-collection/shared/listable-object/listable-object-component-loader.component';
 import { VarDirective } from '../../shared/utils/var.directive';
-import { ViewTrackerComponent } from '../../statistics/angulartics/dspace/view-tracker.component';
 import { ThemedItemAlertsComponent } from '../alerts/themed-item-alerts.component';
-import { getItemPageRoute } from '../item-page-routing-paths';
 import { ItemVersionsComponent } from '../versions/item-versions.component';
 import { ItemVersionsNoticeComponent } from '../versions/notice/item-versions-notice.component';
+import { AccessByTokenNotificationComponent } from './access-by-token-notification/access-by-token-notification.component';
+import { CustomUrlConflictErrorComponent } from './custom-url-conflict-error/custom-url-conflict-error.component';
 import { NotifyRequestsStatusComponent } from './notify-requests-status/notify-requests-status-component/notify-requests-status.component';
 import { QaEventNotificationComponent } from './qa-event-notification/qa-event-notification.component';
 
@@ -66,20 +72,21 @@ import { QaEventNotificationComponent } from './qa-event-notification/qa-event-n
   templateUrl: './item-page.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [fadeInOut],
-  standalone: true,
   imports: [
-    VarDirective,
-    ThemedItemAlertsComponent,
-    ItemVersionsNoticeComponent,
-    ViewTrackerComponent,
-    ListableObjectComponentLoaderComponent,
-    ItemVersionsComponent,
-    ErrorComponent,
-    ThemedLoadingComponent,
-    TranslateModule,
+    AccessByTokenNotificationComponent,
     AsyncPipe,
+    CustomUrlConflictErrorComponent,
+    CustomUrlConflictErrorComponent,
+    ErrorComponent,
+    ItemVersionsComponent,
+    ItemVersionsNoticeComponent,
+    ListableObjectComponentLoaderComponent,
     NotifyRequestsStatusComponent,
     QaEventNotificationComponent,
+    ThemedItemAlertsComponent,
+    ThemedLoadingComponent,
+    TranslateModule,
+    VarDirective,
   ],
 })
 export class ItemPageComponent implements OnInit, OnDestroy {
@@ -93,6 +100,11 @@ export class ItemPageComponent implements OnInit, OnDestroy {
    * The item wrapped in a remote-data object
    */
   itemRD$: Observable<RemoteData<Item>>;
+
+  /**
+   * The request item wrapped in a remote-data object, obtained from the route data
+   */
+  itemRequest$: Observable<ItemRequest>;
 
   /**
    * The view-mode we're currently on
@@ -112,6 +124,12 @@ export class ItemPageComponent implements OnInit, OnDestroy {
   itemUrl: string;
 
   /**
+   * When set, indicates that the page failed due to a custom URL conflict (HTTP 500 + non-UUID param).
+   * Contains the conflicting custom URL value so the error component can build search/edit links.
+   */
+  customUrlConflict$: Observable<string | null>;
+
+  /**
    * Contains a list of SignpostingLink related to the item
    */
   signpostingLinks: SignpostingLink[] = [];
@@ -122,6 +140,8 @@ export class ItemPageComponent implements OnInit, OnDestroy {
   inboxTags: LinkDefinition[] = [];
 
   coarRestApiUrls: string[] = [];
+
+  protected readonly hasValue = hasValue;
 
   constructor(
     protected route: ActivatedRoute,
@@ -144,6 +164,7 @@ export class ItemPageComponent implements OnInit, OnDestroy {
     this.itemRD$ = this.route.data.pipe(
       map((data) => data.dso as RemoteData<Item>),
     );
+
     this.itemPageRoute$ = this.itemRD$.pipe(
       getAllSucceededRemoteDataPayload(),
       map((item) => getItemPageRoute(item)),
@@ -151,6 +172,16 @@ export class ItemPageComponent implements OnInit, OnDestroy {
 
     this.isAdmin$ = this.authorizationService.isAuthorized(FeatureID.AdministratorOf);
 
+    // Detect custom URL conflict: 500 error on a non-UUID route param
+    this.customUrlConflict$ = this.itemRD$.pipe(
+      map((itemRD: RemoteData<Item>) => {
+        const routeId = this.route.snapshot.params.id;
+        if (itemRD?.hasFailed && itemRD.statusCode === 500 && hasValue(routeId) && !uuidValidate(routeId)) {
+          return routeId as string;
+        }
+        return null;
+      }),
+    );
   }
 
   /**
@@ -159,42 +190,40 @@ export class ItemPageComponent implements OnInit, OnDestroy {
    * @private
    */
   private initPageLinks(): void {
-    this.route.params.subscribe(params => {
-      combineLatest([this.signpostingDataService.getLinks(params.id).pipe(take(1)), this.getCoarLdnLocalInboxUrls()])
-        .subscribe(([signpostingLinks, coarRestApiUrls]) => {
-          let links = '';
-          this.signpostingLinks = signpostingLinks;
+    combineLatest([this.route.data.pipe(take(1)), this.getCoarLdnLocalInboxUrls()])
+      .subscribe(([data, coarRestApiUrls]) => {
+        let links = '';
+        this.signpostingLinks = data.links ?? [];
 
-          signpostingLinks.forEach((link: SignpostingLink) => {
-            links = links + (isNotEmpty(links) ? ', ' : '') + `<${link.href}> ; rel="${link.rel}"` + (isNotEmpty(link.type) ? ` ; type="${link.type}" ` : ' ')
-              + (isNotEmpty(link.profile) ? ` ; profile="${link.profile}" ` : '');
-            let tag: LinkDefinition = {
-              href: link.href,
-              rel: link.rel,
-            };
-            if (isNotEmpty(link.type)) {
-              tag = Object.assign(tag, {
-                type: link.type,
-              });
-            }
-            if (isNotEmpty(link.profile)) {
-              tag = Object.assign(tag, {
-                profile: link.profile,
-              });
-            }
-            this.linkHeadService.addTag(tag);
-          });
-
-          if (coarRestApiUrls.length > 0) {
-            const inboxLinks = this.initPageInboxLinks(coarRestApiUrls);
-            links = links + (isNotEmpty(links) ? ', ' : '') + inboxLinks;
+        this.signpostingLinks.forEach((link: SignpostingLink) => {
+          links = links + (isNotEmpty(links) ? ', ' : '') + `<${link.href}> ; rel="${link.rel}"` + (isNotEmpty(link.type) ? ` ; type="${link.type}" ` : ' ')
+            + (isNotEmpty(link.profile) ? ` ; profile="${link.profile}" ` : '');
+          let tag: LinkDefinition = {
+            href: link.href,
+            rel: link.rel,
+          };
+          if (isNotEmpty(link.type)) {
+            tag = Object.assign(tag, {
+              type: link.type,
+            });
           }
-
-          if (isPlatformServer(this.platformId)) {
-            this.responseService.setHeader('Link', links);
+          if (isNotEmpty(link.profile)) {
+            tag = Object.assign(tag, {
+              profile: link.profile,
+            });
           }
+          this.linkHeadService.addTag(tag);
         });
-    });
+
+        if (coarRestApiUrls.length > 0) {
+          const inboxLinks = this.initPageInboxLinks(coarRestApiUrls);
+          links = links + (isNotEmpty(links) ? ', ' : '') + inboxLinks;
+        }
+
+        if (isPlatformServer(this.platformId)) {
+          this.responseService.setHeader('Link', links);
+        }
+      });
   }
 
   /**
@@ -244,4 +273,17 @@ export class ItemPageComponent implements OnInit, OnDestroy {
       this.linkHeadService.removeTag(`href='${link.href}'`);
     });
   }
+
+  /**
+   * Calculate and return end period access date for a request-a-copy link for alert display
+   */
+  getAccessPeriodEndDate(accessPeriod: number, decisionDate: string | number | Date): Date {
+    // Set expiry, if not 0
+    if (hasValue(accessPeriod) && accessPeriod > 0 && hasValue(decisionDate)) {
+      const date = new Date(decisionDate);
+      date.setUTCSeconds(date.getUTCSeconds() + accessPeriod);
+      return date;
+    }
+  }
+
 }

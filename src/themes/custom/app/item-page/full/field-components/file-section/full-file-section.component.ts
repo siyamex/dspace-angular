@@ -10,22 +10,22 @@ import { FileSizePipe } from '../../../../../../../app/shared/utils/file-size-pi
 import { VarDirective } from '../../../../../../../app/shared/utils/var.directive';
 import { ThemedThumbnailComponent } from '../../../../../../../app/thumbnail/themed-thumbnail.component';
 
+
 @Component({
   selector: 'ds-themed-item-page-full-file-section',
   // styleUrls: ['./full-file-section.component.scss'],
   styleUrls: ['../../../../../../../app/item-page/full/field-components/file-section/full-file-section.component.scss'],
   // templateUrl: './full-file-section.component.html',
   templateUrl: '../../../../../../../app/item-page/full/field-components/file-section/full-file-section.component.html',
-  standalone: true,
   imports: [
-    PaginationComponent,
-    TranslateModule,
     AsyncPipe,
-    VarDirective,
-    ThemedThumbnailComponent,
-    ThemedFileDownloadLinkComponent,
     FileSizePipe,
     MetadataFieldWrapperComponent,
+    PaginationComponent,
+    ThemedFileDownloadLinkComponent,
+    ThemedThumbnailComponent,
+    TranslateModule,
+    VarDirective,
   ],
 })
 export class FullFileSectionComponent extends BaseComponent {

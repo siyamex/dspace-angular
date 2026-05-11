@@ -10,6 +10,17 @@ import {
   Injectable,
   TransferState,
 } from '@angular/core';
+import {
+  APP_CONFIG,
+  APP_CONFIG_STATE,
+  AppConfig,
+  toClientConfig,
+} from '@dspace/config/app-config.interface';
+import { BuildConfig } from '@dspace/config/build-config.interface';
+import { CorrelationIdService } from '@dspace/core/correlation-id/correlation-id.service';
+import { LocaleService } from '@dspace/core/locale/locale.service';
+import { HeadTagService } from '@dspace/core/metadata/head-tag.service';
+import { isEmpty } from '@dspace/shared/utils/empty.util';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
 import { lastValueFrom } from 'rxjs';
@@ -17,23 +28,11 @@ import { take } from 'rxjs/operators';
 
 import { AppState } from '../../app/app.reducer';
 import { BreadcrumbsService } from '../../app/breadcrumbs/breadcrumbs.service';
-import { LocaleService } from '../../app/core/locale/locale.service';
-import { HeadTagService } from '../../app/core/metadata/head-tag.service';
-import { CorrelationIdService } from '../../app/correlation-id/correlation-id.service';
 import { InitService } from '../../app/init.service';
-import {
-  isEmpty,
-  isNotEmpty,
-} from '../../app/shared/empty.util';
 import { MenuService } from '../../app/shared/menu/menu.service';
+import { MenuProviderService } from '../../app/shared/menu/menu-provider.service';
 import { ThemeService } from '../../app/shared/theme-support/theme.service';
 import { Angulartics2DSpace } from '../../app/statistics/angulartics/dspace-provider';
-import {
-  APP_CONFIG,
-  APP_CONFIG_STATE,
-  AppConfig,
-} from '../../config/app-config.interface';
-import { BuildConfig } from '../../config/build-config.interface';
 import { environment } from '../../environments/environment';
 
 /**
@@ -53,6 +52,7 @@ export class ServerInitService extends InitService {
     protected breadcrumbsService: BreadcrumbsService,
     protected themeService: ThemeService,
     protected menuService: MenuService,
+    protected menuProviderService: MenuProviderService,
   ) {
     super(
       store,
@@ -65,6 +65,7 @@ export class ServerInitService extends InitService {
       breadcrumbsService,
       themeService,
       menuService,
+      menuProviderService,
     );
   }
 
@@ -82,9 +83,16 @@ export class ServerInitService extends InitService {
       this.themeService.listenForThemeChanges(false);
 
       await lastValueFrom(this.authenticationReady$());
+      this.menuProviderService.initPersistentMenus(true);
 
       return true;
     };
+  }
+
+
+  protected initRouteListeners(): void {
+    super.initRouteListeners();
+    this.menuProviderService.listenForRouteChanges(true);
   }
 
   // Server-only initialization steps
@@ -107,14 +115,9 @@ export class ServerInitService extends InitService {
   }
 
   private saveAppConfigForCSR(): void {
-    if (isNotEmpty(environment.rest.ssrBaseUrl) && environment.rest.baseUrl !== environment.rest.ssrBaseUrl) {
-      // Avoid to transfer ssrBaseUrl in order to prevent security issues
-      const config: AppConfig = Object.assign({}, environment as AppConfig, {
-        rest: Object.assign({}, environment.rest, { ssrBaseUrl: '', hasSsrBaseUrl: true }),
-      });
-      this.transferState.set<AppConfig>(APP_CONFIG_STATE, config);
-    } else {
-      this.transferState.set<AppConfig>(APP_CONFIG_STATE, environment as AppConfig);
-    }
+    this.transferState.set<AppConfig>(
+      APP_CONFIG_STATE,
+      toClientConfig(environment as AppConfig) as AppConfig,
+    );
   }
 }

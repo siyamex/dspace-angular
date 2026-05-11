@@ -3,18 +3,9 @@ import {
   getTestScheduler,
   hot,
 } from 'jasmine-marbles';
-import { of as observableOf } from 'rxjs';
+import { of } from 'rxjs';
 import { TestScheduler } from 'rxjs/testing';
 
-import { getMockHrefOnlyDataService } from '../../../shared/mocks/href-only-data.service.mock';
-import { getMockRemoteDataBuildService } from '../../../shared/mocks/remote-data-build.service.mock';
-import { getMockRequestService } from '../../../shared/mocks/request.service.mock';
-import {
-  createSuccessfulRemoteDataObject,
-  createSuccessfulRemoteDataObject$,
-} from '../../../shared/remote-data.utils';
-import { ObjectCacheServiceStub } from '../../../shared/testing/object-cache-service.stub';
-import { createPaginatedList } from '../../../shared/testing/utils.test';
 import { RemoteDataBuildService } from '../../cache/builders/remote-data-build.service';
 import { RequestParam } from '../../cache/models/request-param.model';
 import { ObjectCacheService } from '../../cache/object-cache.service';
@@ -25,6 +16,15 @@ import { RequestService } from '../../data/request.service';
 import { RequestEntry } from '../../data/request-entry.model';
 import { HALEndpointService } from '../../shared/hal-endpoint.service';
 import { PageInfo } from '../../shared/page-info.model';
+import { getMockHrefOnlyDataService } from '../../testing/href-only-data.service.mock';
+import { ObjectCacheServiceStub } from '../../testing/object-cache-service.stub';
+import { getMockRemoteDataBuildService } from '../../testing/remote-data-build.service.mock';
+import { getMockRequestService } from '../../testing/request.service.mock';
+import { createPaginatedList } from '../../testing/utils.test';
+import {
+  createSuccessfulRemoteDataObject,
+  createSuccessfulRemoteDataObject$,
+} from '../../utilities/remote-data.utils';
 import { VocabularyFindOptions } from './models/vocabulary-find-options.model';
 import { VocabularyOptions } from './models/vocabulary-options.model';
 import { VocabularyDataService } from './vocabulary.data.service';
@@ -100,6 +100,33 @@ describe('VocabularyService', () => {
     type: 'vocabularyEntry',
   };
 
+  const entryDetailRequestURL = `https://rest.api/rest/api/submission/vocabularyEntryDetails/${hierarchicalVocabulary.id}:testValue`;
+  const entryDetailParentRequestURL = `https://rest.api/rest/api/submission/vocabularyEntryDetails/${hierarchicalVocabulary.id}:testValue/parent`;
+  const entryDetailChildrenRequestURL = `https://rest.api/rest/api/submission/vocabularyEntryDetails/${hierarchicalVocabulary.id}:testValue/children`;
+
+  const vocabularyEntryDetail: any = {
+    authority: 'authorityId',
+    display: 'test',
+    value: 'test',
+    otherInformation: {
+      id: 'authorityId',
+      hasChildren: 'true',
+      note: 'Familjeforskning',
+    },
+    type: 'vocabularyEntryDetail',
+    _links: {
+      self: {
+        href: entryDetailRequestURL,
+      },
+      parent: {
+        href: entryDetailParentRequestURL,
+      },
+      children: {
+        href: entryDetailChildrenRequestURL,
+      },
+    },
+  };
+
   const vocabularyEntryParentDetail: any = {
     authority: 'authorityId2',
     display: 'testParent',
@@ -172,9 +199,7 @@ describe('VocabularyService', () => {
   const endpointURL = `https://rest.api/rest/api/submission/vocabularies`;
   const requestURL = `https://rest.api/rest/api/submission/vocabularies/${vocabulary.id}`;
   const entryDetailEndpointURL = `https://rest.api/rest/api/submission/vocabularyEntryDetails`;
-  const entryDetailRequestURL = `https://rest.api/rest/api/submission/vocabularyEntryDetails/${hierarchicalVocabulary.id}:testValue`;
-  const entryDetailParentRequestURL = `https://rest.api/rest/api/submission/vocabularyEntryDetails/${hierarchicalVocabulary.id}:testValue/parent`;
-  const entryDetailChildrenRequestURL = `https://rest.api/rest/api/submission/vocabularyEntryDetails/${hierarchicalVocabulary.id}:testValue/children`;
+
   const requestUUID = '8b3c613a-5a4b-438b-9686-be1d5b4a1c5a';
   const vocabularyId = 'types';
   const metadata = 'dc.type';
@@ -187,6 +212,8 @@ describe('VocabularyService', () => {
   const entryByIDRequestURL = `https://rest.api/rest/api/submission/vocabularies/${vocabulary.id}/entries?entryID=${entryID}`;
   const vocabularyOptions: VocabularyOptions = {
     name: vocabularyId,
+    metadata: metadata,
+    scope: collectionUUID,
     closed: false,
   };
   const pageInfo = new PageInfo();
@@ -199,11 +226,12 @@ describe('VocabularyService', () => {
   const vocabularyRD = createSuccessfulRemoteDataObject(vocabulary);
   const vocabularyRD$ = createSuccessfulRemoteDataObject$(vocabulary);
   const vocabularyEntriesRD = createSuccessfulRemoteDataObject$(paginatedListEntries);
+  const vocabularyEntryDetailRD$ = createSuccessfulRemoteDataObject$(vocabularyEntryDetail);
   const vocabularyEntryDetailParentRD = createSuccessfulRemoteDataObject(vocabularyEntryParentDetail);
   const vocabularyEntryChildrenRD = createSuccessfulRemoteDataObject(childrenPaginatedList);
   const paginatedListRD = createSuccessfulRemoteDataObject(paginatedList);
   const getRequestEntries$ = (successful: boolean) => {
-    return observableOf({
+    return of({
       response: { isSuccessful: successful, payload: arrayEntries } as any,
     } as RequestEntry);
   };
@@ -242,8 +270,9 @@ describe('VocabularyService', () => {
           generateRequestId: requestUUID,
           send: true,
           removeByHrefSubstring: {},
-          getByHref: observableOf(responseCacheEntry),
-          getByUUID: observableOf(responseCacheEntry),
+          getByHref: of(responseCacheEntry),
+          getByUUID: of(responseCacheEntry),
+          setStaleByHrefSubstring: jasmine.createSpy('setStaleByHrefSubstring'),
         });
         rdbService = jasmine.createSpyObj('rdbService', {
           buildSingle: hot('a|', {
@@ -252,6 +281,7 @@ describe('VocabularyService', () => {
           buildList: hot('a|', {
             a: paginatedListRD,
           }),
+          setStaleByHrefSubstring: jasmine.createSpy('setStaleByHrefSubstring'),
         });
 
         service = initTestService();
@@ -260,8 +290,8 @@ describe('VocabularyService', () => {
         spyOn((service as any).vocabularyDataService, 'findAll').and.callThrough();
         spyOn((service as any).vocabularyDataService, 'findByHref').and.callThrough();
         spyOn((service as any).vocabularyDataService, 'getVocabularyByMetadataAndCollection').and.callThrough();
-        spyOn((service as any).vocabularyDataService.findAllData, 'getFindAllHref').and.returnValue(observableOf(entriesRequestURL));
-        spyOn((service as any).vocabularyDataService.searchData, 'getSearchByHref').and.returnValue(observableOf(searchRequestURL));
+        spyOn((service as any).vocabularyDataService.findAllData, 'getFindAllHref').and.returnValue(of(entriesRequestURL));
+        spyOn((service as any).vocabularyDataService.searchData, 'getSearchByHref').and.returnValue(of(searchRequestURL));
       });
 
       afterEach(() => {
@@ -334,6 +364,24 @@ describe('VocabularyService', () => {
           });
           expect(result).toBeObservable(expected);
         });
+      });
+
+      describe('searchVocabularyByMetadataAndCollection', () => {
+        it('should proxy the call to vocabularyDataService.findVocabularyByHref', () => {
+          scheduler.schedule(() => service.searchVocabularyByMetadataAndCollection(vocabularyOptions).subscribe());
+          scheduler.flush();
+
+          expect((service as any).vocabularyDataService.findByHref).toHaveBeenCalledWith(searchRequestURL);
+        });
+
+        it('should return a RemoteData<Vocabulary> for the search', () => {
+          const result = service.searchVocabularyByMetadataAndCollection(vocabularyOptions);
+          const expected = cold('a|', {
+            a: vocabularyRD,
+          });
+          expect(result).toBeObservable(expected);
+        });
+
       });
     });
 
@@ -427,8 +475,9 @@ describe('VocabularyService', () => {
         generateRequestId: requestUUID,
         send: true,
         removeByHrefSubstring: {},
-        getByHref: observableOf(responseCacheEntry),
-        getByUUID: observableOf(responseCacheEntry),
+        getByHref: of(responseCacheEntry),
+        getByUUID: of(responseCacheEntry),
+        setStaleByHrefSubstring: jasmine.createSpy('setStaleByHrefSubstring'),
       });
       rdbService = jasmine.createSpyObj('rdbService', {
         buildSingle: hot('a|', {
@@ -446,9 +495,9 @@ describe('VocabularyService', () => {
       spyOn((service as any).vocabularyEntryDetailDataService, 'findByHref').and.callThrough();
       spyOn((service as any).vocabularyEntryDetailDataService, 'findListByHref').and.callThrough();
       spyOn((service as any).vocabularyEntryDetailDataService, 'searchBy').and.callThrough();
-      spyOn((service as any).vocabularyEntryDetailDataService.searchData, 'getSearchByHref').and.returnValue(observableOf(searchRequestURL));
-      spyOn((service as any).vocabularyEntryDetailDataService.findAllData, 'getFindAllHref').and.returnValue(observableOf(entryDetailChildrenRequestURL));
-      spyOn((service as any).vocabularyEntryDetailDataService, 'getBrowseEndpoint').and.returnValue(observableOf(entryDetailEndpointURL));
+      spyOn((service as any).vocabularyEntryDetailDataService.searchData, 'getSearchByHref').and.returnValue(of(searchRequestURL));
+      spyOn((service as any).vocabularyEntryDetailDataService.findAllData, 'getFindAllHref').and.returnValue(of(entryDetailChildrenRequestURL));
+      spyOn((service as any).vocabularyEntryDetailDataService, 'getBrowseEndpoint').and.returnValue(of(entryDetailEndpointURL));
     });
 
     afterEach(() => {
@@ -490,6 +539,10 @@ describe('VocabularyService', () => {
     });
 
     describe('getEntryDetailParent', () => {
+      beforeEach(() => {
+        (service as any).vocabularyEntryDetailDataService.findById.and.returnValue(vocabularyEntryDetailRD$);
+      });
+
       it('should proxy the call to vocabularyDataService.getEntryDetailParent', () => {
         scheduler.schedule(() => service.getEntryDetailParent('testValue', hierarchicalVocabulary.id).subscribe());
         scheduler.flush();
@@ -507,8 +560,14 @@ describe('VocabularyService', () => {
     });
 
     describe('getEntryDetailChildren', () => {
+      beforeEach(() => {
+        (service as any).vocabularyEntryDetailDataService.findById.and.returnValue(vocabularyEntryDetailRD$);
+      });
+
       it('should proxy the call to vocabularyDataService.getEntryDetailChildren', () => {
         const options: VocabularyFindOptions = new VocabularyFindOptions(
+          null,
+          null,
           null,
           null,
           null,
@@ -538,6 +597,8 @@ describe('VocabularyService', () => {
           null,
           null,
           null,
+          null,
+          null,
           pageInfo.elementsPerPage,
           pageInfo.currentPage,
         );
@@ -562,7 +623,7 @@ describe('VocabularyService', () => {
       it('should remove requests on the data service\'s endpoint', (done) => {
         service.clearSearchTopRequests();
 
-        expect(requestService.removeByHrefSubstring).toHaveBeenCalledWith(`search/${(service as any).searchTopMethod}`);
+        expect(requestService.setStaleByHrefSubstring).toHaveBeenCalledWith(`search/${(service as any).searchTopMethod}`);
         done();
       });
     });

@@ -2,7 +2,6 @@ import { Route } from '@angular/router';
 
 import { LinkMenuItemModel } from '../shared/menu/menu-item/models/link.model';
 import { MenuItemType } from '../shared/menu/menu-item-type.model';
-import { homePageResolver } from './home-page.resolver';
 import { ThemedHomePageComponent } from './themed-home-page.component';
 
 export const ROUTES: Route[] = [
@@ -12,6 +11,7 @@ export const ROUTES: Route[] = [
     pathMatch: 'full',
     data: {
       title: 'home.title',
+      showSocialButtons: true,
       menu: {
         public: [{
           id: 'statistics_site',
@@ -25,9 +25,6 @@ export const ROUTES: Route[] = [
           } as LinkMenuItemModel,
         }],
       },
-    },
-    resolve: {
-      site: homePageResolver,
     },
   },
 ];

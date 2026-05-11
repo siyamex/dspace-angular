@@ -1,3 +1,5 @@
+import { AccessStatusObject } from '@dspace/core/shared/access-status.model';
+import { ACCESS_STATUS } from '@dspace/core/shared/access-status.resource-type';
 import {
   autoserialize,
   deserialize,
@@ -17,7 +19,25 @@ import { Bundle } from './bundle.model';
 import { BUNDLE } from './bundle.resource-type';
 import { ChildHALResource } from './child-hal-resource.model';
 import { DSpaceObject } from './dspace-object.model';
+import {
+  followLink,
+  FollowLinkConfig,
+} from './follow-link-config.model';
 import { HALLink } from './hal-link.model';
+
+/**
+ * The self links defined in this list are expected to be requested somewhere in the near future
+ * Requesting them as embeds will limit the number of requests
+ */
+export const BITSTREAM_PAGE_LINKS_TO_FOLLOW: FollowLinkConfig<Bitstream>[] = [
+  followLink('bundle', {}, followLink('primaryBitstream'), followLink('item')),
+  followLink('format'),
+];
+
+export interface ChecksumInfo {
+  checkSumAlgorithm: string;
+  value: string;
+}
 
 @typedObject
 @inheritSerialization(DSpaceObject)
@@ -37,6 +57,12 @@ export class Bitstream extends DSpaceObject implements ChildHALResource {
   description: string;
 
   /**
+   * The checksum information of this Bitstream
+   */
+  @autoserialize
+  checkSum: ChecksumInfo;
+
+  /**
    * The name of the Bundle this Bitstream is part of
    */
   @autoserialize
@@ -52,6 +78,7 @@ export class Bitstream extends DSpaceObject implements ChildHALResource {
     format: HALLink;
     content: HALLink;
     thumbnail: HALLink;
+    accessStatus: HALLink;
   };
 
   /**
@@ -74,6 +101,13 @@ export class Bitstream extends DSpaceObject implements ChildHALResource {
    */
   @link(BUNDLE)
   bundle?: Observable<RemoteData<Bundle>>;
+
+  /**
+   * The access status for this Bitstream
+   * Will be undefined unless the access status {@link HALLink} has been resolved.
+   */
+  @link(ACCESS_STATUS, false, 'accessStatus')
+  accessStatus?: Observable<RemoteData<AccessStatusObject>>;
 
   getParentLinkKey(): keyof this['_links'] {
     return 'format';

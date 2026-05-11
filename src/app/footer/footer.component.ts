@@ -9,28 +9,39 @@ import {
   Optional,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
-import {
-  Observable,
-  of as observableOf,
-} from 'rxjs';
-
 import {
   APP_CONFIG,
   AppConfig,
-} from '../../config/app-config.interface';
-import { NotifyInfoService } from '../core/coar-notify/notify-info/notify-info.service';
-import { AuthorizationDataService } from '../core/data/feature-authorization/authorization-data.service';
-import { FeatureID } from '../core/data/feature-authorization/feature-id';
-import { OrejimeService } from '../shared/cookies/orejime.service';
-import { hasValue } from '../shared/empty.util';
+} from '@dspace/config/app-config.interface';
+import { NotifyInfoService } from '@dspace/core/coar-notify/notify-info/notify-info.service';
+import { OrejimeService } from '@dspace/core/cookies/orejime.service';
+import { AuthorizationDataService } from '@dspace/core/data/feature-authorization/authorization-data.service';
+import { FeatureID } from '@dspace/core/data/feature-authorization/feature-id';
+import { SiteDataService } from '@dspace/core/data/site-data.service';
+import { LocaleService } from '@dspace/core/locale/locale.service';
+import { hasValue } from '@dspace/shared/utils/empty.util';
+import { TranslateModule } from '@ngx-translate/core';
+import {
+  combineLatest,
+  map,
+  Observable,
+  of,
+  take,
+} from 'rxjs';
+
+import { MarkdownViewerComponent } from '../shared/markdown-viewer/markdown-viewer.component';
 
 @Component({
   selector: 'ds-base-footer',
   styleUrls: ['footer.component.scss'],
   templateUrl: 'footer.component.html',
-  standalone: true,
-  imports: [RouterLink, AsyncPipe, DatePipe, TranslateModule],
+  imports: [
+    AsyncPipe,
+    DatePipe,
+    MarkdownViewerComponent,
+    RouterLink,
+    TranslateModule,
+  ],
 })
 export class FooterComponent implements OnInit {
   dateObj: number = Date.now();
@@ -39,28 +50,44 @@ export class FooterComponent implements OnInit {
    * A boolean representing if to show or not the top footer container
    */
   showTopFooter = false;
+  showCookieSettings = false;
   showPrivacyPolicy: boolean;
   showEndUserAgreement: boolean;
   showSendFeedback$: Observable<boolean>;
   coarLdnEnabled$: Observable<boolean>;
+  footerMetadataValue$: Observable<string>;
 
   constructor(
     @Optional() public cookies: OrejimeService,
     protected authorizationService: AuthorizationDataService,
     protected notifyInfoService: NotifyInfoService,
     @Inject(APP_CONFIG) protected appConfig: AppConfig,
+    private siteService: SiteDataService,
+    private locale: LocaleService,
   ) {
   }
 
   ngOnInit(): void {
+    this.showCookieSettings = this.appConfig.info.enableCookieConsentPopup;
     this.showPrivacyPolicy = this.appConfig.info.enablePrivacyStatement;
     this.showEndUserAgreement = this.appConfig.info.enableEndUserAgreement;
-    this.coarLdnEnabled$ = this.appConfig.info.enableCOARNotifySupport ? this.notifyInfoService.isCoarConfigEnabled() : observableOf(false);
+    this.coarLdnEnabled$ = this.appConfig.info.enableCOARNotifySupport ? this.notifyInfoService.isCoarConfigEnabled() : of(false);
     this.showSendFeedback$ = this.authorizationService.isAuthorized(FeatureID.CanSendFeedback);
+    this.showTopFooter = this.appConfig.homePage.showTopFooter;
+
+    this.footerMetadataValue$ = combineLatest({
+      site$: this.siteService.find().pipe(
+        take(1),
+      ),
+      language$: this.locale.getCurrentLanguageCode(),
+    }).pipe(
+      take(1),
+      map(({ site$, language$ }) => site$?.firstMetadataValue('dspace.cms.footer', { language: language$ })),
+    );
   }
 
-  showCookieSettings() {
-    if (hasValue(this.cookies)) {
+  openCookieSettings() {
+    if (hasValue(this.cookies) && this.cookies.showSettings instanceof Function) {
       this.cookies.showSettings();
     }
     return false;

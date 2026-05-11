@@ -10,22 +10,21 @@ import { MetadataFieldWrapperComponent } from '../../../../../../../app/shared/m
 import { FileSizePipe } from '../../../../../../../app/shared/utils/file-size-pipe';
 import { VarDirective } from '../../../../../../../app/shared/utils/var.directive';
 
+
 @Component({
   selector: 'ds-themed-item-page-file-section',
   // templateUrl: './file-section.component.html',
   templateUrl: '../../../../../../../app/item-page/simple/field-components/file-section/file-section.component.html',
   animations: [slideSidebarPadding],
-  standalone: true,
   imports: [
     CommonModule,
-    ThemedFileDownloadLinkComponent,
+    FileSizePipe,
     MetadataFieldWrapperComponent,
+    ThemedFileDownloadLinkComponent,
     ThemedLoadingComponent,
     TranslateModule,
-    FileSizePipe,
     VarDirective,
   ],
 })
 export class FileSectionComponent extends BaseComponent {
-
 }

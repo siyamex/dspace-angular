@@ -13,6 +13,46 @@ import {
 import { By } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
+import { APP_CONFIG } from '@dspace/config/app-config.interface';
+import { AuthService } from '@dspace/core/auth/auth.service';
+import { BrowseDefinitionDataService } from '@dspace/core/browse/browse-definition-data.service';
+import { RemoteDataBuildService } from '@dspace/core/cache/builders/remote-data-build.service';
+import { ObjectCacheService } from '@dspace/core/cache/object-cache.service';
+import { BitstreamDataService } from '@dspace/core/data/bitstream-data.service';
+import { CommunityDataService } from '@dspace/core/data/community-data.service';
+import { DefaultChangeAnalyzer } from '@dspace/core/data/default-change-analyzer.service';
+import { DSOChangeAnalyzer } from '@dspace/core/data/dso-change-analyzer.service';
+import { AuthorizationDataService } from '@dspace/core/data/feature-authorization/authorization-data.service';
+import { ItemDataService } from '@dspace/core/data/item-data.service';
+import { buildPaginatedList } from '@dspace/core/data/paginated-list.model';
+import { RelationshipDataService } from '@dspace/core/data/relationship-data.service';
+import { RemoteData } from '@dspace/core/data/remote-data';
+import { VersionDataService } from '@dspace/core/data/version-data.service';
+import { VersionHistoryDataService } from '@dspace/core/data/version-history-data.service';
+import { NotificationsService } from '@dspace/core/notification-system/notifications.service';
+import { ResearcherProfileDataService } from '@dspace/core/profile/researcher-profile-data.service';
+import { RouteService } from '@dspace/core/services/route.service';
+import { Bitstream } from '@dspace/core/shared/bitstream.model';
+import { HALEndpointService } from '@dspace/core/shared/hal-endpoint.service';
+import { Item } from '@dspace/core/shared/item.model';
+import { Relationship } from '@dspace/core/shared/item-relationships/relationship.model';
+import { RelationshipType } from '@dspace/core/shared/item-relationships/relationship-type.model';
+import { MetadataValue } from '@dspace/core/shared/metadata.models';
+import { PageInfo } from '@dspace/core/shared/page-info.model';
+import { UUIDService } from '@dspace/core/shared/uuid.service';
+import { WorkspaceitemDataService } from '@dspace/core/submission/workspaceitem-data.service';
+import { AuthServiceStub } from '@dspace/core/testing/auth-service.stub';
+import { BrowseDefinitionDataServiceStub } from '@dspace/core/testing/browse-definition-data-service.stub';
+import { mockTruncatableService } from '@dspace/core/testing/mock-trucatable.service';
+import { routeServiceStub } from '@dspace/core/testing/route-service.stub';
+import { TranslateLoaderMock } from '@dspace/core/testing/translate-loader.mock';
+import { createPaginatedList } from '@dspace/core/testing/utils.test';
+import {
+  compareArraysUsing,
+  compareArraysUsingIds,
+} from '@dspace/core/utilities/item-relationships-utils';
+import { createSuccessfulRemoteDataObject$ } from '@dspace/core/utilities/remote-data.utils';
+import { isNotEmpty } from '@dspace/shared/utils/empty.util';
 import { Store } from '@ngrx/store';
 import { provideMockStore } from '@ngrx/store/testing';
 import {
@@ -21,62 +61,24 @@ import {
 } from '@ngx-translate/core';
 import {
   Observable,
-  of as observableOf,
+  of,
 } from 'rxjs';
 
-import { APP_CONFIG } from '../../../../../config/app-config.interface';
-import { AuthService } from '../../../../core/auth/auth.service';
-import { BrowseDefinitionDataService } from '../../../../core/browse/browse-definition-data.service';
-import { RemoteDataBuildService } from '../../../../core/cache/builders/remote-data-build.service';
-import { ObjectCacheService } from '../../../../core/cache/object-cache.service';
-import { BitstreamDataService } from '../../../../core/data/bitstream-data.service';
-import { CommunityDataService } from '../../../../core/data/community-data.service';
-import { DefaultChangeAnalyzer } from '../../../../core/data/default-change-analyzer.service';
-import { DSOChangeAnalyzer } from '../../../../core/data/dso-change-analyzer.service';
-import { AuthorizationDataService } from '../../../../core/data/feature-authorization/authorization-data.service';
-import { ItemDataService } from '../../../../core/data/item-data.service';
-import { buildPaginatedList } from '../../../../core/data/paginated-list.model';
-import { RelationshipDataService } from '../../../../core/data/relationship-data.service';
-import { RemoteData } from '../../../../core/data/remote-data';
-import { VersionDataService } from '../../../../core/data/version-data.service';
-import { VersionHistoryDataService } from '../../../../core/data/version-history-data.service';
-import { ResearcherProfileDataService } from '../../../../core/profile/researcher-profile-data.service';
-import { RouteService } from '../../../../core/services/route.service';
-import { Bitstream } from '../../../../core/shared/bitstream.model';
-import { HALEndpointService } from '../../../../core/shared/hal-endpoint.service';
-import { Item } from '../../../../core/shared/item.model';
-import { Relationship } from '../../../../core/shared/item-relationships/relationship.model';
-import { RelationshipType } from '../../../../core/shared/item-relationships/relationship-type.model';
-import { MetadataValue } from '../../../../core/shared/metadata.models';
-import { PageInfo } from '../../../../core/shared/page-info.model';
-import { SearchService } from '../../../../core/shared/search/search.service';
-import { UUIDService } from '../../../../core/shared/uuid.service';
-import { WorkspaceitemDataService } from '../../../../core/submission/workspaceitem-data.service';
+import { environment } from '../../../../../environments/environment';
 import { DsoEditMenuComponent } from '../../../../shared/dso-page/dso-edit-menu/dso-edit-menu.component';
-import { isNotEmpty } from '../../../../shared/empty.util';
 import { MetadataFieldWrapperComponent } from '../../../../shared/metadata-field-wrapper/metadata-field-wrapper.component';
-import { mockTruncatableService } from '../../../../shared/mocks/mock-trucatable.service';
-import { TranslateLoaderMock } from '../../../../shared/mocks/translate-loader.mock';
-import { NotificationsService } from '../../../../shared/notifications/notifications.service';
-import { createSuccessfulRemoteDataObject$ } from '../../../../shared/remote-data.utils';
 import { ThemedResultsBackButtonComponent } from '../../../../shared/results-back-button/themed-results-back-button.component';
-import { AuthServiceStub } from '../../../../shared/testing/auth-service.stub';
-import { BrowseDefinitionDataServiceStub } from '../../../../shared/testing/browse-definition-data-service.stub';
-import { routeServiceStub } from '../../../../shared/testing/route-service.stub';
-import { createPaginatedList } from '../../../../shared/testing/utils.test';
+import { SearchService } from '../../../../shared/search/search.service';
 import { TruncatableService } from '../../../../shared/truncatable/truncatable.service';
 import { TruncatePipe } from '../../../../shared/utils/truncate.pipe';
 import { ThemedThumbnailComponent } from '../../../../thumbnail/themed-thumbnail.component';
 import { GenericItemPageFieldComponent } from '../../field-components/specific-field/generic/generic-item-page-field.component';
+import { ItemPageOrcidFieldComponent } from '../../field-components/specific-field/orcid/item-page-orcid-field.component';
 import { ThemedItemPageTitleFieldComponent } from '../../field-components/specific-field/title/themed-item-page-field.component';
 import { ThemedMetadataRepresentationListComponent } from '../../metadata-representation-list/themed-metadata-representation-list.component';
 import { TabbedRelatedEntitiesSearchComponent } from '../../related-entities/tabbed-related-entities-search/tabbed-related-entities-search.component';
 import { RelatedItemsComponent } from '../../related-items/related-items-component';
 import { ItemComponent } from './item.component';
-import {
-  compareArraysUsing,
-  compareArraysUsingIds,
-} from './item-relationships-utils';
 
 export function getIIIFSearchEnabled(enabled: boolean): MetadataValue {
   return Object.assign(new MetadataValue(), {
@@ -100,13 +102,19 @@ export function getIIIFEnabled(enabled: boolean): MetadataValue {
 
 export const mockRouteService = {
   getPreviousUrl(): Observable<string> {
-    return observableOf('');
+    return of('');
+  },
+  storeUrlInSession(key: string, url: string): void {
+    // no-op
+  },
+  getUrlFromSession(key: string): string | null {
+    return null;
   },
   getQueryParameterValue(): Observable<string> {
-    return observableOf('');
+    return of('');
   },
   getRouteParameterValue(): Observable<string> {
-    return observableOf('');
+    return of('');
   },
 };
 
@@ -131,7 +139,7 @@ export function getItemPageFieldsTest(mockItem: Item, component) {
       };
 
       const authorizationService = jasmine.createSpyObj('authorizationService', {
-        isAuthorized: observableOf(true),
+        isAuthorized: of(true),
       });
 
       relationshipService = jasmine.createSpyObj('relationshipService', {
@@ -186,6 +194,7 @@ export function getItemPageFieldsTest(mockItem: Item, component) {
             provide: BrowseDefinitionDataService,
             useValue: BrowseDefinitionDataServiceStub,
           },
+          { provide: APP_CONFIG, useValue: environment },
         ],
         schemas: [NO_ERRORS_SCHEMA],
       })
@@ -200,6 +209,7 @@ export function getItemPageFieldsTest(mockItem: Item, component) {
               RelatedItemsComponent,
               TabbedRelatedEntitiesSearchComponent,
               ThemedMetadataRepresentationListComponent,
+              ItemPageOrcidFieldComponent,
             ],
           },
           add: { changeDetection: ChangeDetectionStrategy.Default },
@@ -481,6 +491,7 @@ describe('ItemComponent', () => {
 
     const searchUrl = '/search?query=test&spc.page=2';
     const browseUrl = '/browse/title?scope=0cc&bbm.page=3';
+    const homeUrl = '/home';
     const recentSubmissionsUrl = '/collections/be7b8430-77a5-4016-91c9-90863e50583a?cp.page=3';
 
     beforeEach(waitForAsync(() => {
@@ -535,31 +546,57 @@ describe('ItemComponent', () => {
     }));
 
     it('should hide back button', () => {
-      spyOn(mockRouteService, 'getPreviousUrl').and.returnValue(observableOf('/item'));
+      spyOn(mockRouteService, 'getPreviousUrl').and.returnValue(of('/item'));
       comp.ngOnInit();
       comp.showBackButton$.subscribe((val) => {
         expect(val).toBeFalse();
       });
     });
     it('should show back button for search', () => {
-      spyOn(mockRouteService, 'getPreviousUrl').and.returnValue(observableOf(searchUrl));
+      spyOn(mockRouteService, 'getPreviousUrl').and.returnValue(of(searchUrl));
       comp.ngOnInit();
       comp.showBackButton$.subscribe((val) => {
         expect(val).toBeTrue();
       });
     });
     it('should show back button for browse', () => {
-      spyOn(mockRouteService, 'getPreviousUrl').and.returnValue(observableOf(browseUrl));
+      spyOn(mockRouteService, 'getPreviousUrl').and.returnValue(of(browseUrl));
       comp.ngOnInit();
       comp.showBackButton$.subscribe((val) => {
         expect(val).toBeTrue();
       });
     });
     it('should show back button for recent submissions', () => {
-      spyOn(mockRouteService, 'getPreviousUrl').and.returnValue(observableOf(recentSubmissionsUrl));
+      spyOn(mockRouteService, 'getPreviousUrl').and.returnValue(of(recentSubmissionsUrl));
       comp.ngOnInit();
       comp.showBackButton$.subscribe((val) => {
         expect(val).toBeTrue();
+      });
+    });
+
+    it('should show back button for home', () => {
+      spyOn(mockRouteService, 'getPreviousUrl').and.returnValue(of(homeUrl));
+      comp.ngOnInit();
+      comp.showBackButton$.subscribe((val) => {
+        expect(val).toBeTrue();
+      });
+    });
+
+    it('should prioritize home previous url over session fallback', () => {
+      const staleSessionUrl = searchUrl;
+      const getPreviousUrlSpy = spyOn(mockRouteService, 'getPreviousUrl').and.returnValue(of(homeUrl));
+      const getUrlFromSessionSpy = spyOn(mockRouteService, 'getUrlFromSession').and.returnValue(staleSessionUrl);
+      const storeUrlInSessionSpy = spyOn(mockRouteService, 'storeUrlInSession');
+
+      comp.ngOnInit();
+      comp.showBackButton$.subscribe((val) => {
+        expect(val).toBeTrue();
+        expect(getPreviousUrlSpy).toHaveBeenCalled();
+        expect(getUrlFromSessionSpy).not.toHaveBeenCalled();
+        expect(storeUrlInSessionSpy).toHaveBeenCalledWith('item-previous-url', homeUrl);
+
+        comp.back();
+        expect(router.navigateByUrl).toHaveBeenCalledWith(homeUrl);
       });
     });
   });

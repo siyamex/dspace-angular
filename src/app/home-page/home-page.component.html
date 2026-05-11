@@ -1,5 +1,12 @@
+@if (homeHeaderMetadataValue$ | async; as homeHeaderMetadataValue) {
+  <div class="container home-header">
+    <ds-markdown-viewer [value]="homeHeaderMetadataValue"></ds-markdown-viewer>
+  </div>
+}
+
 <ds-home-coar></ds-home-coar>
 <ds-home-news></ds-home-news>
+
 @if (showDiscoverFilters) {
   <ds-configuration-search-page
     [sideBarWidth]="3"
@@ -18,9 +25,6 @@
 <ds-suggestions-popup></ds-suggestions-popup>
 
 <ng-template #homeContent>
-  @if ((site$ | async); as site) {
-    <ds-view-tracker [object]="site"></ds-view-tracker>
-  }
   <ds-search-form [inPlaceSearch]="false"
     [searchPlaceholder]="'home.search-form.placeholder' | translate">
   </ds-search-form>

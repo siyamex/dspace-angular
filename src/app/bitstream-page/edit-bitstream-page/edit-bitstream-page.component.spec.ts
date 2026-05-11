@@ -16,35 +16,37 @@ import {
   Router,
 } from '@angular/router';
 import { RouterTestingModule } from '@angular/router/testing';
+import { DSONameService } from '@dspace/core/breadcrumbs/dso-name.service';
+import { BitstreamDataService } from '@dspace/core/data/bitstream-data.service';
+import { BitstreamFormatDataService } from '@dspace/core/data/bitstream-format-data.service';
+import { AuthorizationDataService } from '@dspace/core/data/feature-authorization/authorization-data.service';
+import { PrimaryBitstreamService } from '@dspace/core/data/primary-bitstream.service';
+import {
+  INotification,
+  Notification,
+} from '@dspace/core/notification-system/models/notification.model';
+import { NotificationType } from '@dspace/core/notification-system/models/notification-type';
+import { NotificationsService } from '@dspace/core/notification-system/notifications.service';
+import { Bitstream } from '@dspace/core/shared/bitstream.model';
+import { BitstreamFormat } from '@dspace/core/shared/bitstream-format.model';
+import { BitstreamFormatSupportLevel } from '@dspace/core/shared/bitstream-format-support-level';
+import { Item } from '@dspace/core/shared/item.model';
+import { MetadataValueFilter } from '@dspace/core/shared/metadata.models';
+import { AuthorizationDataServiceStub } from '@dspace/core/testing/authorization-service.stub';
+import { createPaginatedList } from '@dspace/core/testing/utils.test';
+import {
+  createSuccessfulRemoteDataObject,
+  createSuccessfulRemoteDataObject$,
+} from '@dspace/core/utilities/remote-data.utils';
+import { hasValue } from '@dspace/shared/utils/empty.util';
 import {
   DynamicFormControlModel,
   DynamicFormService,
 } from '@ng-dynamic-forms/core';
 import { TranslateModule } from '@ngx-translate/core';
-import { of as observableOf } from 'rxjs';
+import { of } from 'rxjs';
 
-import { DSONameService } from '../../core/breadcrumbs/dso-name.service';
-import { BitstreamDataService } from '../../core/data/bitstream-data.service';
-import { BitstreamFormatDataService } from '../../core/data/bitstream-format-data.service';
-import { PrimaryBitstreamService } from '../../core/data/primary-bitstream.service';
-import { Bitstream } from '../../core/shared/bitstream.model';
-import { BitstreamFormat } from '../../core/shared/bitstream-format.model';
-import { BitstreamFormatSupportLevel } from '../../core/shared/bitstream-format-support-level';
-import { Item } from '../../core/shared/item.model';
-import { MetadataValueFilter } from '../../core/shared/metadata.models';
 import { getEntityEditRoute } from '../../item-page/item-page-routing-paths';
-import { hasValue } from '../../shared/empty.util';
-import {
-  INotification,
-  Notification,
-} from '../../shared/notifications/models/notification.model';
-import { NotificationType } from '../../shared/notifications/models/notification-type';
-import { NotificationsService } from '../../shared/notifications/notifications.service';
-import {
-  createSuccessfulRemoteDataObject,
-  createSuccessfulRemoteDataObject$,
-} from '../../shared/remote-data.utils';
-import { createPaginatedList } from '../../shared/testing/utils.test';
 import { FileSizePipe } from '../../shared/utils/file-size-pipe';
 import { VarDirective } from '../../shared/utils/var.directive';
 import { EditBitstreamPageComponent } from './edit-bitstream-page.component';
@@ -126,6 +128,7 @@ describe('EditBitstreamPageComponent', () => {
 
     bitstreamFormatService = jasmine.createSpyObj('bitstreamFormatService', {
       findAll: createSuccessfulRemoteDataObject$(createPaginatedList(allFormats)),
+      findByHref: createSuccessfulRemoteDataObject$(selectedFormat),
     });
 
     notificationsService = jasmine.createSpyObj('notificationsService',
@@ -161,6 +164,7 @@ describe('EditBitstreamPageComponent', () => {
   });
 
   describe('EditBitstreamPageComponent no IIIF fields', () => {
+    const dsoNameServiceReturnValue = 'ORIGINAL';
 
     beforeEach(waitForAsync(() => {
       bundle = {
@@ -176,7 +180,6 @@ describe('EditBitstreamPageComponent', () => {
           },
         })),
       };
-      const bundleName = 'ORIGINAL';
 
       bitstream = Object.assign(new Bitstream(), {
         uuid: bitstreamID,
@@ -196,6 +199,7 @@ describe('EditBitstreamPageComponent', () => {
         format: createSuccessfulRemoteDataObject$(selectedFormat),
         _links: {
           self: 'bitstream-selflink',
+          format: 'format-link',
         },
         bundle: createSuccessfulRemoteDataObject$(bundle),
       });
@@ -209,9 +213,10 @@ describe('EditBitstreamPageComponent', () => {
       });
       bitstreamFormatService = jasmine.createSpyObj('bitstreamFormatService', {
         findAll: createSuccessfulRemoteDataObject$(createPaginatedList(allFormats)),
+        findByHref: createSuccessfulRemoteDataObject$(selectedFormat),
       });
       dsoNameService = jasmine.createSpyObj('dsoNameService', {
-        getName: bundleName,
+        getName: dsoNameServiceReturnValue,
       });
 
       TestBed.configureTestingModule({
@@ -222,7 +227,7 @@ describe('EditBitstreamPageComponent', () => {
           {
             provide: ActivatedRoute,
             useValue: {
-              data: observableOf({ bitstream: createSuccessfulRemoteDataObject(bitstream) }),
+              data: of({ bitstream: createSuccessfulRemoteDataObject(bitstream) }),
               snapshot: { queryParams: {} },
             },
           },
@@ -231,6 +236,7 @@ describe('EditBitstreamPageComponent', () => {
           { provide: BitstreamFormatDataService, useValue: bitstreamFormatService },
           { provide: PrimaryBitstreamService, useValue: primaryBitstreamService },
           ChangeDetectorRef,
+          { provide: AuthorizationDataService, useClass: AuthorizationDataServiceStub },
         ],
         schemas: [NO_ERRORS_SCHEMA],
       }).compileComponents();
@@ -253,7 +259,7 @@ describe('EditBitstreamPageComponent', () => {
       });
 
       it('should fill in the bitstream\'s title', () => {
-        expect(rawForm.fileNamePrimaryContainer.fileName).toEqual(bitstream.name);
+        expect(rawForm.fileNamePrimaryContainer.fileName).toEqual(dsoNameServiceReturnValue);
       });
 
       it('should fill in the bitstream\'s description', () => {
@@ -432,7 +438,7 @@ describe('EditBitstreamPageComponent', () => {
     });
     describe('when navigateToItemEditBitstreams is called', () => {
       it('should redirect to the item edit page on the bitstreams tab with the itemId from the component', () => {
-        comp.itemId = 'some-uuid1';
+        comp.item.uuid = 'some-uuid1';
         comp.navigateToItemEditBitstreams();
         expect(router.navigate).toHaveBeenCalledWith([getEntityEditRoute(null, 'some-uuid1'), 'bitstreams']);
       });
@@ -481,6 +487,7 @@ describe('EditBitstreamPageComponent', () => {
         format: createSuccessfulRemoteDataObject$(allFormats[1]),
         _links: {
           self: 'bitstream-selflink',
+          format: 'format-link',
         },
         bundle: createSuccessfulRemoteDataObject$({
           _links: {
@@ -517,7 +524,7 @@ describe('EditBitstreamPageComponent', () => {
           {
             provide: ActivatedRoute,
             useValue: {
-              data: observableOf({ bitstream: createSuccessfulRemoteDataObject(bitstream) }),
+              data: of({ bitstream: createSuccessfulRemoteDataObject(bitstream) }),
               snapshot: { queryParams: {} },
             },
           },
@@ -526,6 +533,7 @@ describe('EditBitstreamPageComponent', () => {
           { provide: BitstreamFormatDataService, useValue: bitstreamFormatService },
           { provide: PrimaryBitstreamService, useValue: primaryBitstreamService },
           ChangeDetectorRef,
+          { provide: AuthorizationDataService, useClass: AuthorizationDataServiceStub },
         ],
         schemas: [NO_ERRORS_SCHEMA],
       }).compileComponents();
@@ -605,7 +613,7 @@ describe('EditBitstreamPageComponent', () => {
         format: createSuccessfulRemoteDataObject$(allFormats[2]),
         _links: {
           self: 'bitstream-selflink',
-        },
+          format: 'format-link' },
         bundle: createSuccessfulRemoteDataObject$({
           _links: {
             primaryBitstream: {
@@ -640,7 +648,7 @@ describe('EditBitstreamPageComponent', () => {
           { provide: DynamicFormService, useValue: formService },
           { provide: ActivatedRoute,
             useValue: {
-              data: observableOf({ bitstream: createSuccessfulRemoteDataObject(bitstream) }),
+              data: of({ bitstream: createSuccessfulRemoteDataObject(bitstream) }),
               snapshot: { queryParams: {} },
             },
           },
@@ -649,6 +657,7 @@ describe('EditBitstreamPageComponent', () => {
           { provide: BitstreamFormatDataService, useValue: bitstreamFormatService },
           { provide: PrimaryBitstreamService, useValue: primaryBitstreamService },
           ChangeDetectorRef,
+          { provide: AuthorizationDataService, useClass: AuthorizationDataServiceStub },
         ],
         schemas: [NO_ERRORS_SCHEMA],
       }).compileComponents();

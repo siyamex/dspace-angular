@@ -1,6 +1,5 @@
 import {
   AsyncPipe,
-  NgClass,
   NgTemplateOutlet,
 } from '@angular/common';
 import {
@@ -9,20 +8,26 @@ import {
   OnInit,
 } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
 import {
   APP_CONFIG,
   AppConfig,
-} from 'src/config/app-config.interface';
+} from '@dspace/config/app-config.interface';
+import { LocaleService } from '@dspace/core/locale/locale.service';
+import { Site } from '@dspace/core/shared/site.model';
+import { TranslateModule } from '@ngx-translate/core';
+import {
+  combineLatest,
+  Observable,
+} from 'rxjs';
+import {
+  map,
+  take,
+} from 'rxjs/operators';
 
-import { Site } from '../core/shared/site.model';
-import { SuggestionsPopupComponent } from '../notifications/suggestions-popup/suggestions-popup.component';
+import { SuggestionsPopupComponent } from '../notifications/suggestions/popup/suggestions-popup.component';
 import { ThemedConfigurationSearchPageComponent } from '../search-page/themed-configuration-search-page.component';
+import { MarkdownViewerComponent } from '../shared/markdown-viewer/markdown-viewer.component';
 import { ThemedSearchFormComponent } from '../shared/search-form/themed-search-form.component';
-import { PageWithSidebarComponent } from '../shared/sidebar/page-with-sidebar.component';
-import { ViewTrackerComponent } from '../statistics/angulartics/dspace/view-tracker.component';
 import { HomeCoarComponent } from './home-coar/home-coar.component';
 import { ThemedHomeNewsComponent } from './home-news/themed-home-news.component';
 import { RecentItemListComponent } from './recent-item-list/recent-item-list.component';
@@ -32,18 +37,31 @@ import { ThemedTopLevelCommunityListComponent } from './top-level-community-list
   selector: 'ds-base-home-page',
   styleUrls: ['./home-page.component.scss'],
   templateUrl: './home-page.component.html',
-  standalone: true,
-  imports: [ThemedHomeNewsComponent, NgTemplateOutlet, ViewTrackerComponent, ThemedSearchFormComponent, ThemedTopLevelCommunityListComponent, RecentItemListComponent, AsyncPipe, TranslateModule, NgClass, SuggestionsPopupComponent, ThemedConfigurationSearchPageComponent, PageWithSidebarComponent, HomeCoarComponent],
+  imports: [
+    AsyncPipe,
+    HomeCoarComponent,
+    MarkdownViewerComponent,
+    NgTemplateOutlet,
+    RecentItemListComponent,
+    SuggestionsPopupComponent,
+    ThemedConfigurationSearchPageComponent,
+    ThemedHomeNewsComponent,
+    ThemedSearchFormComponent,
+    ThemedTopLevelCommunityListComponent,
+    TranslateModule,
+  ],
 })
 export class HomePageComponent implements OnInit {
 
   site$: Observable<Site>;
   recentSubmissionspageSize: number;
   showDiscoverFilters: boolean;
+  homeHeaderMetadataValue$: Observable<string>;
 
   constructor(
     @Inject(APP_CONFIG) protected appConfig: AppConfig,
     protected route: ActivatedRoute,
+    private locale: LocaleService,
   ) {
     this.recentSubmissionspageSize = this.appConfig.homePage.recentSubmissions.pageSize;
     this.showDiscoverFilters = this.appConfig.homePage.showDiscoverFilters;
@@ -52,6 +70,14 @@ export class HomePageComponent implements OnInit {
   ngOnInit(): void {
     this.site$ = this.route.data.pipe(
       map((data) => data.site as Site),
+    );
+
+    this.homeHeaderMetadataValue$ = combineLatest({
+      site: this.site$,
+      language: this.locale.getCurrentLanguageCode(),
+    }).pipe(
+      take(1),
+      map(({ site, language }) => site?.firstMetadataValue('dspace.cms.home-header', { language })),
     );
   }
 
